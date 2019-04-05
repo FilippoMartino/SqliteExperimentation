@@ -1,0 +1,45 @@
+Il programma: 
+$: sqlite3
+
+Per uscire:
+sqlite> .quit
+
+Creare una tabella:
+sqlite> create table tabella(parametri);
+
+Inserire valori in una tabella:
+sqlite> insert into tabella(valori);
+
+Visualizzare lista tabelle:
+sqlite> .table
+
+Visualizzare schema tabelle:
+sqlite> .schema 
+sqlite> .schema [SPECIFICARE QUI LA TABELLA]
+
+Esportare il database in un formato:
+sqlite> .output [path] //specifica il persorso in cui verrà esportato il db
+sqlite> .dump [nomeDb]
+sqlite> .quit
+
+Esempio esportare db in .sql
+sqlite> .output mydb.sql
+sqlite> .dump
+sqlite> .quit
+
+
+Per compilare un file in c assicurarsi che la libreria sia installata:
+$ sudo apt-get install sqlite3
+$ sudo apt-get install libsqlite3-dev
+
+Compilazione:
+$  gcc [fileDaCompilare] -lsqlite
+
+Per altre informazioni consultare il link (official):
+https://sqlite.org/cli.html
+
+
+
+
+
+
