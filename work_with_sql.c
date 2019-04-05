@@ -8,16 +8,47 @@
 
 /*
   Questa funzione serve per stampare il risultato della chiamata alla funzoione
-  sqlite3_exec
+  sqlite3_exec, ecco com'è strutturata:
+
+   void*:   Data provided in the 4th argument of sqlite3_exec()
+   int:     The number of columns in row
+   char**:  An array of strings representing fields in the row
+   char**:  An array of strings representing column names
+
+   La funzione riceve comunque solo una riga di database per volta
+);
 */
-int callback(void *NotUsed, int argc, char **argv, char **azColName) {
-   int i;
-   for(i = 0; i<argc; i++) {
+int callback(void *query_result, int cells_number, char **rows, char **rows_index) {
+
+   for(int i = 0; i < cells_number; i++) {
       //se nella cella è presente un dato lo stampa, altrimenti inserisce NULL
-      printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+      printf("%s: %s\n", rows_index[i], rows[i] ? rows[i] : "NULL");
    }
    printf("\n");
    return 0;
+}
+
+/*
+  Uso questa funzione per ricevere i risultati (insistenti) della query
+  per le operazioni di creazione Tabella, in questo modo ottimizzo
+  l'esecuizione del codice
+
+*/
+int null_object(){  return 0;  }
+
+void execute_query(sqlite3* my_db, char* sql){
+
+  char* error_message = 0;
+  int ret = sqlite3_exec(my_db, sql, callback, 0, &error_message);
+
+  if( ret != SQLITE_OK ){
+      printf("Errore durante l'interrogazione: %s\n", error_message);
+      sqlite3_free(error_message);
+   } else
+
+  sqlite3_free(error_message);
+
+
 }
 
 int main(int argc, char const *argv[]) {
@@ -29,7 +60,7 @@ int main(int argc, char const *argv[]) {
 
   /*
     Il codice sottostante concatena il nome del db fornitoci
-    dall'utente con la cartella in cui sono organizzati i database
+    dall'utente con la cartella in cui soncognomeo organizzati i database
   */
 
   char* db_name = strcat(strdup(DB_FOLDER), strdup(argv[1]));
@@ -74,7 +105,7 @@ int main(int argc, char const *argv[]) {
   char* error_message = 0;
   char* sql;
 
-  //query per la creazione di una tabella
+  //query per la creazione di una tabella (uso la drop visto che ricompilo ed eseguo il codice molte votle)
   sql = "DROP TABLE Famiglia;" \
         "CREATE TABLE Famiglia("  \
         "id INT PRIMARY KEY NOT NULL, " \
@@ -87,12 +118,12 @@ int main(int argc, char const *argv[]) {
 
       my_db:    oggetto database aperto
       sql:      stringa con query da eseguire
-      callback: funzione che riceverà i dati "protagonisti" della query, utile
-                per ricevere il risultato delle interrogazioni, ma funziona anche
-                (come in questo caso) per ricevere i dati dello schema
+      callback: funzione che riceverà i dati "protagonisti" della query, funziona
+                per le interrogazioni, non per la creazione di tabelle e per l'inserimento
+                di valori
   */
 
-  ret = sqlite3_exec(my_db, sql, callback, 0, &error_message);
+  ret = sqlite3_exec(my_db, sql, null_object, 0, &error_message);
 
   if( ret != SQLITE_OK ){
       printf("Errore durante la creazione della tabella: %s\n", error_message);
@@ -115,7 +146,7 @@ int main(int argc, char const *argv[]) {
          "INSERT INTO Famiglia (id, nome, cognome, anni) "  \
          "VALUES (4, 'Anna', 'Martino', 18); ";
 
-  ret = sqlite3_exec(my_db, sql, callback, 0, &error_message);
+  ret = sqlite3_exec(my_db, sql, null_object, 0, &error_message);
 
   if( ret != SQLITE_OK ){
      printf("Errore durante l'inserimento dei dati nella tabella: %s\n", error_message);
@@ -124,8 +155,26 @@ int main(int argc, char const *argv[]) {
   } else
     printf("Dati inseriti con successo\n");
 
+  /*  Proviamo a fare un paio di interrogazioni   */
+
+  sql = "SELECT * FROM Famiglia";
+  printf("==========Selezione di tutti gli elementi==========\n\n");
+  execute_query(my_db, sql);
+  sql = "SELECT * FROM Famiglia WHERE anni>30";
+  printf("==========Selezione di tutti i record con con più di 30 anni==========\n\n");
+  execute_query(my_db, sql);
+  sql = "SELECT Famiglia.cognome FROM Famiglia WHERE anni > 30";
+  printf("==========Selezione dei cognomi delle persone con più di 30 anni==========\n\n");
+  execute_query(my_db, sql);
+  sql = "SELECT Famiglia.nome FROM Famiglia WHERE anni<30";
+  printf("==========Selezione di tutti ci nomi delle persone con meno di 30 anni==========\n\n");
+  execute_query(my_db, sql);
+
+
   sqlite3_free(error_message);
   sqlite3_close(my_db);
+
+
 
   return 0;
 }
