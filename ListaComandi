@@ -14,7 +14,7 @@ Visualizzare lista tabelle:
 sqlite> .table
 
 Visualizzare schema tabelle:
-sqlite> .schema 
+sqlite> .schema
 sqlite> .schema [SPECIFICARE QUI LA TABELLA]
 
 Esportare il database in un formato:
@@ -37,6 +37,8 @@ $  gcc [fileDaCompilare] -lsqlite
 
 Per altre informazioni consultare il link (official):
 https://sqlite.org/cli.html
+
+regex -> <sql(\s+database=(.+))?\s+query=(.*;)\s*\/>
 
 
 
