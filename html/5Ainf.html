@@ -7,21 +7,6 @@
   <body>
       <h1 align="center">Lista dei componenti della 5ainf</h1>
     <sql database=itis_mario_delpozzo />
-    <sql
-      query=CREATE TABLE 5a-inf(
-        numero_registro INT PRIMARY KEY NOT NULL,
-        nome VARCHAR(50) NOT NULL,
-        cognome VARCHAR(50) NOT NULL,
-        leva INT NOT NULL,
-        sesso CHAR NOT NULL
-      );
-    />
-    <sql
-      query=INSERT INSERT INTO 5a-inf (numero_registro, nome, cognome, leva, sesso)
-      VALUES (1, "Armando", "Lorenzo", 1999, 'm');
-      VALUES (2, "Berardo", "Nicholas", 2000, 'm');
-      VALUES (3, "Bertaina", "Nicolò", 2000, 'm');
-      VALUES (4, "Borgetto", "Thomas", 2000, 'm');
-    />
+    <sql query=SELECT * FROM classe_quinta; />
   </body>
 </html>

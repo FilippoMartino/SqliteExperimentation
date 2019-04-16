@@ -27,6 +27,7 @@ sqlite> .output mydb.sql
 sqlite> .dump
 sqlite> .quit
 
+"<sql\\s+query=\\s+(.*\\s*){1,4};\\s*\\/>"
 
 Per compilare un file in c assicurarsi che la libreria sia installata:
 $ sudo apt-get install sqlite3
@@ -41,8 +42,3 @@ https://sqlite.org/cli.html
 regex -> <sql(\s+database=(.+))?\s+query=(.*;)\s*\/>
 per estrarre i valori trovati:
   www.lemoda.net/c/unix-regex/
-
-
-
-
-

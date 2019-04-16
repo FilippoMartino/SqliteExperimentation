@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <regex.h>
+#include <errno.h>
 #include <sqlite3.h>
 
 //specificare il percorso
@@ -20,6 +21,7 @@ void execute_query(sqlite3*, char*);
 int callback(void *, int, char **, char **);
 int null_object();
 char* get_db_name(char*);
+char* get_query(char*);
 int get_file_size(char*);
 void remove_range_from_file(char*, int, int);
 
@@ -37,7 +39,6 @@ int main(int argc, char const *argv[]) {
 
   //concateno il nome del file passatoci con il percorso
   char* file_name = strcat(strdup(HTML_FOLDER),strdup(argv[1]));
-  sqlite3* my_db;
   //creo il primo file
   FILE* original_file = fopen(file_name, "r");
 
@@ -65,95 +66,41 @@ int main(int argc, char const *argv[]) {
 
   //se ho trovato il nome del db lo stampo altrimenti termino il programma
   char* db_name = get_db_name(TMP_FILE_NAME);
-
-  if (db_name == NULL)
-    return -1;
+  char* query = get_query(TMP_FILE_NAME);
 
   printf("db_name: %s\n", db_name);
+  printf("query: %s\n", query);
 
 
 
-  //
-  // if (sqlite3_open(db_name, &my_db)){
-  //   printf("Impossibile accedere al database: %s\n", sqlite3_errmsg(my_db));
-  //   return -1;
-  // }else
-  //   printf("Database aperto con successo\n");
-  //
-  //
-  //
-  // int ret;
-  // char* error_message = 0;
-  // char* sql;
-  //
-  // //query per la creazione di una tabella (uso la drop visto che ricompilo ed eseguo il codice molte votle)
-  // sql = "DROP TABLE Famiglia;" \
-  //       "CREATE TABLE Famiglia("  \
-  //       "id INT PRIMARY KEY NOT NULL, " \
-  //       "nome VARCHAR(50) NOT NULL," \
-  //       "cognome VARCHAR(50) NOT NULL," \
-  //       "anni INT NOT NULL);";
-  //
-  // /*
-  //     Eseguo la query con la funzione sqlite3_exec(), che pretende:
-  //
-  //     my_db:    oggetto database aperto
-  //     sql:      stringa con query da eseguire
-  //     callback: funzione che riceverà i dati "protagonisti" della query, funziona
-  //               per le interrogazioni, non per la creazione di tabelle e per l'inserimento
-  //               di valori
-  // */
-  //
-  // ret = sqlite3_exec(my_db, sql, null_object, 0, &error_message);
-  //
-  // if( ret != SQLITE_OK ){
-  //     printf("Errore durante la creazione della tabella: %s\n", error_message);
-  //     sqlite3_free(error_message);
-  //     return -1;
-  //  } else
-  //     printf("Tabella creata con successo\n");
-  //
-  // /*
-  //   Andiamo adesso ad inserire alcuni valori all'interno della Tabella
-  //   (nella query che si compone possono essere inseriti più valori)
-  // */
-  //
-  // sql =  "INSERT INTO Famiglia (id, nome, cognome, anni) "  \
-  //        "VALUES (1, 'Filippo', 'Martino', 18); " \
-  //        "INSERT INTO Famiglia (id, nome, cognome, anni) "  \
-  //        "VALUES (2, 'Mario', 'Martino', 50); "
-  //        "INSERT INTO Famiglia (id, nome, cognome, anni) "  \
-  //        "VALUES (3, 'Laura', 'Pagge', 50); "
-  //        "INSERT INTO Famiglia (id, nome, cognome, anni) "  \
-  //        "VALUES (4, 'Anna', 'Martino', 18); ";
-  //
-  // ret = sqlite3_exec(my_db, sql, null_object, 0, &error_message);
-  //
-  // if( ret != SQLITE_OK ){
-  //    printf("Errore durante l'inserimento dei dati nella tabella: %s\n", error_message);
-  //    sqlite3_free(error_message);
-  //    return -1;
-  // } else
-  //   printf("Dati inseriti con successo\n");
-  //
-  // /*  Proviamo a fare un paio di interrogazioni   */
-  //
-  // sql = "SELECT * FROM Famiglia";
-  // printf("==========Selezione di tutti gli elementi==========\n\n");
-  // execute_query(my_db, sql);
-  // sql = "SELECT * FROM Famiglia WHERE anni>30";
-  // printf("==========Selezione di tutti i record con con più di 30 anni==========\n\n");
-  // execute_query(my_db, sql);
-  // sql = "SELECT Famiglia.cognome FROM Famiglia WHERE anni > 30";
-  // printf("==========Selezione dei cognomi delle persone con più di 30 anni==========\n\n");
-  // execute_query(my_db, sql);
-  // sql = "SELECT Famiglia.nome FROM Famiglia WHERE anni<30";
-  // printf("==========Selezione di tutti ci nomi delle persone con meno di 30 anni==========\n\n");
-  // execute_query(my_db, sql);
-  //
-  //
-  // sqlite3_free(error_message);
-  // sqlite3_close(my_db);
+  sqlite3* my_db;
+
+  if (sqlite3_open(db_name, &my_db)){
+    printf("Impossibile accedere al database: %s\n", sqlite3_errmsg(my_db));
+    return -1;
+  }else
+    printf("Database aperto con successo\n");
+
+  int ret;
+  char* error_message = 0;
+
+  /*
+    Eseguo la query con la funzione sqlite3_exec(), che pretende:
+
+    my_db:    oggetto database aperto
+    sql:      stringa con query da eseguire
+    callback: funzione che riceverà i dati "protagonisti" della query, funziona
+              per le interrogazioni, non per la creazione di tabelle e per l'inserimento
+              di valori
+
+  */
+
+  query = "SELECT * FROM classe_quinta;";
+
+  execute_query(my_db, query);
+
+  sqlite3_free(error_message);
+  sqlite3_close(my_db);
   //
 
 
@@ -246,6 +193,50 @@ static int compile_regex (regex_t * r, const char * regex_text){
 
 }
 
+char* get_query(char* file_path){
+
+  FILE* file = fopen(file_path, "r");
+  //buffer per lettura sequenziale del file
+  int file_size = get_file_size(file_path);
+  char buffer[file_size + 1];
+  //Copio il file in un buffer
+  fread(buffer, file_size, sizeof(char), file);
+  //chiudo il file
+  fclose(file);
+
+  //Passiamo adesso alla ricerca della query
+
+  //regex in cui verrà compilato il comando
+  regex_t regex;
+  //il buffer lo preferisco come puntatore
+  char* file_content = strdup(buffer);
+  //testo della regex
+  char* regex_text = "<sql\\s*query=\\s*(.*;)\\s*\\/>";
+
+  //procediamo alla compilazione della regex
+  compile_regex(&regex, regex_text);
+  int n_matches = 10;
+
+  regmatch_t matches_array[n_matches];
+  //eseguiamo la regex
+  regexec(&regex, file_content, n_matches, matches_array, 0);
+
+  //ottengo il nome del db dal secondo gruppo
+  char *result;
+  //alloco result
+  result = (char*)malloc(matches_array[1].rm_eo - matches_array[1].rm_so);
+  //copio, partendo dalla posizione del buffer interessata, la lunghezza del nome del db
+  strncpy(result, &buffer[matches_array[1].rm_so], matches_array[1].rm_eo - matches_array[1].rm_so);
+  char* query_name = strdup(result);
+  //deallochiamo la stringa di cortesia
+  free(result);
+
+  //provvediamo adesso a rimuovere la linea dal file
+  remove_range_from_file(file_path, matches_array[0].rm_so, matches_array[0].rm_eo);
+
+  return query_name;
+
+}
 
 int callback(void *query_result, int cells_number, char **rows, char **rows_index) {
 
