@@ -10,129 +10,18 @@
 //speccificare il nome del file temporaneo che verrà composto
 #define TMP_FILE_NAME "html/temp.html"
 
-//grandezza massima buffer gestione regex 
+//grandezza massima buffer gestione regex
 #define MAX_ERROR_MSG 0x1000
 
-/*
-  Funzione che facilita la compilazione di una regex
-  gestisce gli errori e ritorna un valore
-*/
-static int compile_regex (regex_t * r, const char * regex_text){
+//Prototipi
 
-    int status = regcomp(r, regex_text, REG_EXTENDED|REG_NEWLINE);
-
-    if (status != 0) { 
-	    char error_message[MAX_ERROR_MSG];
-	    regerror (status, r, error_message, MAX_ERROR_MSG);
-      printf ("Regex error compiling '%s': %s\n",
-              regex_text, error_message);
-            return -1;
-    }
-    
-    return 0;
-
-  }
-  
-int callback(void *query_result, int cells_number, char **rows, char **rows_index) {
-
-   for(int i = 0; i < cells_number; i++) {
-      //se nella cella è presente un dato lo stampa, altrimenti inserisce NULL
-      printf("%s: %s\n", rows_index[i], rows[i] ? rows[i] : "NULL");
-   }
-   printf("\n");
-   return 0;
-}
-
-int null_object(){  return 0;  }
-  
-void execute_query(sqlite3* my_db, char* sql){
-
-  char* error_message = 0;
-  int ret = sqlite3_exec(my_db, sql, callback, 0, &error_message);
-
-  if( ret != SQLITE_OK ){
-      printf("Errore durante l'interrogazione: %s\n", error_message);
-      sqlite3_free(error_message);
-   } else
-
-  sqlite3_free(error_message);
-
-}
-
-/*
-  L'idea sarebbe quella di intercettare la stringa contentente il nome
-  del db a cui connetterci e successivamente eliminare la riga con il
-  corrispondente <sql> dal file temporaneo che abbiamo creato
-
-*/
-char* get_db_name(char* file_path){
-
-  FILE* file = fopen(file_path, "r");
-  //buffer per lettura sequenziale del file
-  char buffer[512];
-  
-  //string in cui mettiamo il contenuto da trovare
-  char* match;
-
-  //facciamo dei cicli per 512 caratteri finchè il file non finisce
-  while(fgets(buffer, 512, file) != NULL) {
-     match = strstr(buffer, "CONNECT TO");
-     //se troviamo quello che stiamo cercando usciamo
-     if(match != NULL)
-        break;
-  }
-
-  //chiudiamo il file
-  fclose(file);
-
-  if (match == NULL){
-    printf("Si è verificato un problema durante la ricerca del nome del db\n");
-    return NULL;
-  }
-  
-  //Passiamo adesso alla ricerca del nome del database
-  //regex in cui verrà compilato il comando
-  regex_t regex;
-  //comando contenente la regex in formato stringa
-  char* regex_text = "<sql(\s+database=(.+))?\s+query=(.*;)\s*\/>";
-  
-  //procediamo alla compilazione della regex
-  compile_regex(&regex, regex_text);
-  
-  //numero dei matches che consentiamo di trovare
-  int n_matches;
-  //vettore con i matches effettivi
-  regmatch_t m[n_matches];
-  //eseguiamo la regex
-  regexec(r, p, n_matches, m, 0);
-  
-  
-  
-  
-  
-  
-  
-  
-  
-
-  //essendo il nome del db preceduto dai caratteri CONNECT TO sposto di 11 il puntatore
-  char* temp = strdup(match) + 11;
-  //variabile in cui vado ad inserire il nome del db (può essere lungo al massimo 100 caratteri)
-  char db_name[100];
-
-     //scorro l'array con il nome del db finchè non incorro in uno spazio
-     for (int i = 0; (temp[i]) != ' ' && (temp[i] != '<'); i++){
-        //DEBUG
-        printf("match[%d]: %c\n", i, temp[i]);
-        db_name[i] = temp[i];
-
-     }
-
-  //vado a restituire il puntatore
-  return strdup(db_name);
-
-
-}
+static int compile_regex (regex_t *, const char *);
+void execute_query(sqlite3*, char*);
+int callback(void *, int, char **, char **);
+int null_object();
+char* get_db_name(char*);
+int get_file_size(char*);
+void remove_range_from_file(char*, char*, int, int, int);
 
 /*
   L'idea sarebbe quella di, una volta preso il nome del file da parsificare,
@@ -173,12 +62,11 @@ int main(int argc, char const *argv[]) {
   fclose(original_file);
   //che il temporaneo, spetterà alle funzioni cambiarlo
   fclose(temp_file);
-  char* db_name;
 
   //se ho trovato il nome del db lo stampo altrimenti termino il programma
-  if (get_db_name(TMP_FILE_NAME) != NULL)
-    db_name = get_db_name(TMP_FILE_NAME);
-  else
+  char* db_name = get_db_name(TMP_FILE_NAME);
+
+  if (db_name == NULL)
     return -1;
 
   printf("db_name: %s\n", db_name);
@@ -270,4 +158,154 @@ int main(int argc, char const *argv[]) {
 
 
   return 0;
+
+}
+
+/*
+  Funzione che facilita la compilazione di una regex
+  gestisce gli errori e ritorna un valore
+*/
+static int compile_regex (regex_t * r, const char * regex_text){
+
+    int status = regcomp(r, regex_text, REG_EXTENDED|REG_NEWLINE);
+
+    if (status != 0) {
+	    char error_message[MAX_ERROR_MSG];
+	    regerror (status, r, error_message, MAX_ERROR_MSG);
+      printf ("Regex error compiling '%s': %s\n",
+              regex_text, error_message);
+            return -1;
+    }
+
+    return 0;
+
+  }
+
+  /*
+    L'idea sarebbe quella di intercettare la stringa contentente il nome
+    del db a cui connetterci e successivamente eliminare la riga con il
+    corrispondente <sql> dal file temporaneo che abbiamo creato
+
+  */
+  char* get_db_name(char* file_path){
+
+    FILE* file = fopen(file_path, "r");
+    //buffer per lettura sequenziale del file
+    int file_size = get_file_size(file_path);
+    char buffer[file_size + 1];
+
+    //Copio il file in un buffer
+    fread(buffer, file_size, sizeof(char), file);
+
+    //chiudo il file
+    fclose(file);
+
+    //Passiamo adesso alla ricerca del nome del database
+
+    //regex in cui verrà compilato il comando
+    regex_t regex;
+    //il buffer lo preferisco come puntatore
+    char* file_content = strdup(buffer);;
+    //comando contenente la regex in formato stringa
+    //quella di tosello -> "<sql(\\s+database=(.+))?\\s+query=(.*;)\\s*\\/>"
+    char* regex_text = "<sql(\\s+database=(.+))\\/>";
+
+    //procediamo alla compilazione della regex
+    compile_regex(&regex, regex_text);
+
+    //numero dei matches che consentiamo di trovare
+    int n_matches = 10;
+    /*
+      vettore con i matches effettivi, struttura:
+
+      regmatch_t{
+
+        int rm_so; puntatore all'inizio dell'occorrenza
+        int rm_eo; puntatore alla fine dell'occorrenza
+      }
+
+    */
+    regmatch_t matches_array[n_matches];
+    //eseguiamo la regex
+    regexec(&regex, file_content, n_matches, matches_array, 0);
+
+    //ottengo il nome del db dal secondo gruppo
+    char *result;
+    //alloco result
+    result = (char*)malloc(matches_array[2].rm_eo - matches_array[2].rm_so);
+    //copio, partendo dalla posizione del buffer interessata, la lunghezza del nome del db
+    strncpy(result, &buffer[matches_array[2].rm_so], matches_array[2].rm_eo - matches_array[2].rm_so);
+    char* db_name = strdup(result);
+    //deallochiamo la stringa di cortesia
+    free(result);
+
+    //provvediamo adesso a rimuovere la linea dal file
+    remove_range_from_file(file_path, buffer, file_size, matches_array[0].rm_so, matches_array[0].rm_eo);
+
+    return db_name;
+
+}
+
+int callback(void *query_result, int cells_number, char **rows, char **rows_index) {
+
+   for(int i = 0; i < cells_number; i++) {
+      //se nella cella è presente un dato lo stampa, altrimenti inserisce NULL
+      printf("%s: %s\n", rows_index[i], rows[i] ? rows[i] : "NULL");
+   }
+   printf("\n");
+   return 0;
+}
+
+int null_object(){  return 0;  }
+
+void execute_query(sqlite3* my_db, char* sql){
+
+  char* error_message = 0;
+  int ret = sqlite3_exec(my_db, sql, callback, 0, &error_message);
+
+  if( ret != SQLITE_OK ){
+      printf("Errore durante l'interrogazione: %s\n", error_message);
+      sqlite3_free(error_message);
+   } else
+
+  sqlite3_free(error_message);
+
+}
+
+int get_file_size(char* file_path){
+
+  //apro il file in modalità lettura
+  FILE* file = fopen(file_path, "r");
+
+  //controlliamo che il file passato dall'utente esista effettivamente
+  if (file == NULL) {
+    printf("File Not Found!\n");
+    return -1;
+  }
+
+    /*
+    per utilizzo di questa fuzione vedre es calcolare_dimesione_file
+    nella cartella esercizi
+    */
+
+    fseek(file, 0L, SEEK_END);
+
+    // calcoliamo la grandezza del file passato mediante ftell()
+    int file_size = ftell(file);
+
+    // chiudo il file
+    fclose(file);
+
+    return file_size;
+
+}
+
+void remove_range_from_file(char* path, char* buffer, int buffer_size, int start, int end){
+
+  FILE* file = fopen(path, "w");
+  for(int i = 0; i < buffer_size + 1; i++){
+    if(i < start || i > end)
+      fputc(buffer[i], file);
+  }
+  fclose(file);
 }
