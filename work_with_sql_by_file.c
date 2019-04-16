@@ -21,7 +21,7 @@ int callback(void *, int, char **, char **);
 int null_object();
 char* get_db_name(char*);
 int get_file_size(char*);
-void remove_range_from_file(char*, char*, int, int, int);
+void remove_range_from_file(char*, int, int);
 
 /*
   L'idea sarebbe quella di, una volta preso il nome del file da parsificare,
@@ -240,11 +240,12 @@ static int compile_regex (regex_t * r, const char * regex_text){
     free(result);
 
     //provvediamo adesso a rimuovere la linea dal file
-    remove_range_from_file(file_path, buffer, file_size, matches_array[0].rm_so, matches_array[0].rm_eo);
+    remove_range_from_file(file_path, matches_array[0].rm_so, matches_array[0].rm_eo);
 
     return db_name;
 
 }
+
 
 int callback(void *query_result, int cells_number, char **rows, char **rows_index) {
 
@@ -300,10 +301,27 @@ int get_file_size(char* file_path){
 
 }
 
-void remove_range_from_file(char* path, char* buffer, int buffer_size, int start, int end){
+/*
+
+  Questa funzione si occupa di rimuovere la sezione di file in cui abbiamo trovato un
+  ta sql, parametri:
+
+  char* path:   Percorso del file da cui rimuovere la sezione
+  int start:    Inizio della sezione da rimuovere
+  int end:      Fine della sezione da rimuovere
+
+*/
+void remove_range_from_file(char* path, int start, int end){
+
+  //prima copio il file in un buffer:
+  int file_size = get_file_size(path);
+  char buffer[file_size];
+  FILE* to_close = fopen(path, "r");
+  fread(buffer, file_size, sizeof(char), to_close);
+  fclose(to_close);
 
   FILE* file = fopen(path, "w");
-  for(int i = 0; i < buffer_size + 1; i++){
+  for(int i = 0; i < file_size + 1; i++){
     if(i < start || i > end)
       fputc(buffer[i], file);
   }
