@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <regex.h>
 #include <sqlite3.h>
 
 //specificare il percorso
@@ -10,6 +10,29 @@
 //speccificare il nome del file temporaneo che verrà composto
 #define TMP_FILE_NAME "html/temp.html"
 
+//grandezza massima buffer gestione regex 
+#define MAX_ERROR_MSG 0x1000
+
+/*
+  Funzione che facilita la compilazione di una regex
+  gestisce gli errori e ritorna un valore
+*/
+static int compile_regex (regex_t * r, const char * regex_text){
+
+    int status = regcomp(r, regex_text, REG_EXTENDED|REG_NEWLINE);
+
+    if (status != 0) { 
+	    char error_message[MAX_ERROR_MSG];
+	    regerror (status, r, error_message, MAX_ERROR_MSG);
+      printf ("Regex error compiling '%s': %s\n",
+              regex_text, error_message);
+            return -1;
+    }
+    
+    return 0;
+
+  }
+  
 int callback(void *query_result, int cells_number, char **rows, char **rows_index) {
 
    for(int i = 0; i < cells_number; i++) {
@@ -21,7 +44,7 @@ int callback(void *query_result, int cells_number, char **rows, char **rows_inde
 }
 
 int null_object(){  return 0;  }
-
+  
 void execute_query(sqlite3* my_db, char* sql){
 
   char* error_message = 0;
@@ -47,6 +70,7 @@ char* get_db_name(char* file_path){
   FILE* file = fopen(file_path, "r");
   //buffer per lettura sequenziale del file
   char buffer[512];
+  
   //string in cui mettiamo il contenuto da trovare
   char* match;
 
@@ -65,6 +89,31 @@ char* get_db_name(char* file_path){
     printf("Si è verificato un problema durante la ricerca del nome del db\n");
     return NULL;
   }
+  
+  //Passiamo adesso alla ricerca del nome del database
+  //regex in cui verrà compilato il comando
+  regex_t regex;
+  //comando contenente la regex in formato stringa
+  char* regex_text = "<sql(\s+database=(.+))?\s+query=(.*;)\s*\/>";
+  
+  //procediamo alla compilazione della regex
+  compile_regex(&regex, regex_text);
+  
+  //numero dei matches che consentiamo di trovare
+  int n_matches;
+  //vettore con i matches effettivi
+  regmatch_t m[n_matches];
+  //eseguiamo la regex
+  regexec(r, p, n_matches, m, 0);
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
   //essendo il nome del db preceduto dai caratteri CONNECT TO sposto di 11 il puntatore
   char* temp = strdup(match) + 11;
