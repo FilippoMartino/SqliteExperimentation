@@ -267,6 +267,7 @@ void make_table(char* file_path, QUERY_INFO* query_info){
     int sql_index = query_info->query_index;
     //deallochiamo lo spazio in memoria
     free(query_info);
+    
 }
 
 int callback(void *query_result, int cells_number, char **rows, char **rows_index) {
