@@ -14,6 +14,17 @@
 //grandezza massima buffer gestione regex
 #define MAX_ERROR_MSG 0x1000
 
+//struttura per crezione tabella
+typedef struct {
+
+  //stringa con query
+  char* query;
+  //posizione della query nel file originale
+  int query_index;
+
+}QUERY_INFO;
+
+
 //Prototipi
 
 static int compile_regex (regex_t *, const char *);
@@ -21,7 +32,8 @@ void execute_query(sqlite3*, char*);
 int callback(void *, int, char **, char **);
 int null_object();
 char* get_db_name(char*);
-char* get_query(char*);
+QUERY_INFO* get_query(char*);
+void make_table(char*, QUERY_INFO*);
 int get_file_size(char*);
 void remove_range_from_file(char*, int, int);
 
@@ -64,14 +76,9 @@ int main(int argc, char const *argv[]) {
   //che il temporaneo, spetterà alle funzioni cambiarlo
   fclose(temp_file);
 
-  //se ho trovato il nome del db lo stampo altrimenti termino il programma
-  char* db_name = get_db_name(TMP_FILE_NAME);
-  char* query = get_query(TMP_FILE_NAME);
-
-  printf("db_name: %s\n", db_name);
-  printf("query: %s\n", query);
-
-
+  //Prelevo i nomi del db concatenandone il nome al percorso
+  //Attenzione allo strdup
+  char* db_name = strcat(strdup(DB_FOLDER), strdup(get_db_name(TMP_FILE_NAME)));
 
   sqlite3* my_db;
 
@@ -84,6 +91,9 @@ int main(int argc, char const *argv[]) {
   int ret;
   char* error_message = 0;
 
+  QUERY_INFO* my_query_info = get_query(TMP_FILE_NAME);
+  printf("query: %s\n", my_query_info->query);
+
   /*
     Eseguo la query con la funzione sqlite3_exec(), che pretende:
 
@@ -95,9 +105,7 @@ int main(int argc, char const *argv[]) {
 
   */
 
-  query = "SELECT * FROM classe_quinta;";
-
-  execute_query(my_db, query);
+  execute_query(my_db, my_query_info->query);
 
   sqlite3_free(error_message);
   sqlite3_close(my_db);
@@ -134,7 +142,7 @@ static int compile_regex (regex_t * r, const char * regex_text){
     corrispondente <sql> dal file temporaneo che abbiamo creato
 
   */
-  char* get_db_name(char* file_path){
+char* get_db_name(char* file_path){
 
     FILE* file = fopen(file_path, "r");
     //buffer per lettura sequenziale del file
@@ -155,7 +163,17 @@ static int compile_regex (regex_t * r, const char * regex_text){
     char* file_content = strdup(buffer);;
     //comando contenente la regex in formato stringa
     //quella di tosello -> "<sql(\\s+database=(.+))?\\s+query=(.*;)\\s*\\/>"
-    char* regex_text = "<sql(\\s+database=(.+))\\/>";
+    /*
+      Regex fatta da me: cerca un carattere sql, successivamente accetta
+      un numero indefinito di spazi che possono esserci come non esserci (\s*)
+      poi cerca la parola chiave 'database=', dopo di essa sono accettati un numero
+      indefinito di spazii che possono esserci come non esserci;
+      nelle parentesi tonde c'è ciò che desideriamo intercettare: il nome del Database
+      l'espressione [^ ]* significa "accetta qualsiasi carattere che non sia uno spazio"
+      in modo da evitarci problemi di spazi dopo il nome del db; accetto successivamente un
+      numero indefinito si spazi fino al /> che chiude il tag
+    */
+    char* regex_text = "<sql\\s*database=\\s*([^ ]*)\\s*\\/>";
 
     //procediamo alla compilazione della regex
     compile_regex(&regex, regex_text);
@@ -179,9 +197,9 @@ static int compile_regex (regex_t * r, const char * regex_text){
     //ottengo il nome del db dal secondo gruppo
     char *result;
     //alloco result
-    result = (char*)malloc(matches_array[2].rm_eo - matches_array[2].rm_so);
+    result = (char*)malloc(matches_array[1].rm_eo - matches_array[1].rm_so);
     //copio, partendo dalla posizione del buffer interessata, la lunghezza del nome del db
-    strncpy(result, &buffer[matches_array[2].rm_so], matches_array[2].rm_eo - matches_array[2].rm_so);
+    strncpy(result, &buffer[matches_array[1].rm_so], matches_array[1].rm_eo - matches_array[1].rm_so);
     char* db_name = strdup(result);
     //deallochiamo la stringa di cortesia
     free(result);
@@ -190,10 +208,9 @@ static int compile_regex (regex_t * r, const char * regex_text){
     remove_range_from_file(file_path, matches_array[0].rm_so, matches_array[0].rm_eo);
 
     return db_name;
+  }
 
-}
-
-char* get_query(char* file_path){
+QUERY_INFO* get_query(char* file_path){
 
   FILE* file = fopen(file_path, "r");
   //buffer per lettura sequenziale del file
@@ -233,9 +250,23 @@ char* get_query(char* file_path){
 
   //provvediamo adesso a rimuovere la linea dal file
   remove_range_from_file(file_path, matches_array[0].rm_so, matches_array[0].rm_eo);
+  //compiliamo la struttura e restituiamola
+  QUERY_INFO* info = (QUERY_INFO*) malloc(sizeof(QUERY_INFO));
+  info->query = strdup(query_name);
+  printf("query: %s\n", info->query);
+  info->query_index = matches_array[0].rm_so;
 
-  return query_name;
+  return info;
 
+}
+
+void make_table(char* file_path, QUERY_INFO* query_info){
+
+    //estrapoliamo i dati dalla struttura
+    char* query = query_info->query;
+    int sql_index = query_info->query_index;
+    //deallochiamo lo spazio in memoria
+    free(query_info);
 }
 
 int callback(void *query_result, int cells_number, char **rows, char **rows_index) {
@@ -310,9 +341,8 @@ void remove_range_from_file(char* path, int start, int end){
   FILE* to_close = fopen(path, "r");
   fread(buffer, file_size, sizeof(char), to_close);
   fclose(to_close);
-
   FILE* file = fopen(path, "w");
-  for(int i = 0; i < file_size + 1; i++){
+  for(int i = 0; i < file_size; i++){
     if(i < start || i > end)
       fputc(buffer[i], file);
   }
