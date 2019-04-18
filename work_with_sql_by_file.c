@@ -10,6 +10,19 @@
 #define HTML_FOLDER "html/"
 //speccificare il nome del file temporaneo che verrà composto
 #define TMP_FILE_NAME "html/temp.html"
+//regex che cerca il nome del db nel rispettivo tag <sql/>
+#define FIND_TAG_DB_REGEX "<sql\\s*database=\\s*([^ ]*)\\s*\\/>"
+//regex che cerca una query nel rispettivo tag <sql/>
+#define FIND_TAG_QUERY_REGEX "<sql\\s*query=\\s*(.*;)\\s*\\/>"
+//definizione dei tag per scrivere la tabella html
+#define TAG_TABLE_START "<table border=\"1px solid\" align=\"center\">"
+#define TAG_TABLE_END "</table>"
+#define TAG_TR_START "<tr>"
+#define TAG_TR_END "</tr>"
+#define TAG_TH_START "<th>"
+#define TAG_TH_START "</th>"
+#define TAG_TD_START "<td>"
+#define TAG_TD_END "</td>"
 
 //grandezza massima buffer gestione regex
 #define MAX_ERROR_MSG 0x1000
@@ -56,7 +69,12 @@ char* get_db_name(char*);
 */
 void find_query(char*);
 //Costruisce la tabella dopo aver interrogato il database
-void make_table(char*, TABLE_INFO*, sqlite3*);
+void make_table(sqlite3*);
+/*
+  Funzione chiamata da quella che esegue la query che viene fatta nella funzione
+  precedente, (utilizza TABLE_INFO)
+*/
+int make_table_callback(void*, int, char **, char **);
 //Restituisce la grandezza del file che si trova nel percorso passatogli
 int get_file_size(char*);
 //Rimove (dal file corrsipondente al path passato) il range specificato
@@ -136,7 +154,7 @@ int main(int argc, char const *argv[]) {
   */
 
 
-
+  make_table(my_db);
   sqlite3_free(error_message);
   sqlite3_close(my_db);
   //
@@ -203,10 +221,10 @@ char* get_db_name(char* file_path){
       in modo da evitarci problemi di spazi dopo il nome del db; accetto successivamente un
       numero indefinito si spazi fino al /> che chiude il tag
     */
-    char* regex_text = "<sql\\s*database=\\s*([^ ]*)\\s*\\/>";
+
 
     //procediamo alla compilazione della regex
-    compile_regex(&regex, regex_text);
+    compile_regex(&regex, strdup(FIND_TAG_DB_REGEX));
 
     //numero dei matches che consentiamo di trovare
     int n_matches = 10;
@@ -257,11 +275,9 @@ void find_query(char* file_path){
   regex_t regex;
   //il buffer lo preferisco come puntatore
   char* file_content = strdup(buffer);
-  //testo della regex
-  char* regex_text = "<sql\\s*query=\\s*(.*;)\\s*\\/>";
 
   //procediamo alla compilazione della regex
-  compile_regex(&regex, regex_text);
+  compile_regex(&regex, strdup(FIND_TAG_QUERY_REGEX));
   int n_matches = 10;
 
   regmatch_t matches_array[n_matches];
@@ -298,18 +314,42 @@ void make_table(sqlite3* my_db){
 
   char* error_message = 0;
   char* query = strdup(info_table->query);
-  int ret = sqlite3_exec(my_db, query, callback, 0, &error_message);
+  int ret = sqlite3_exec(my_db, query, make_table_callback, 0, &error_message);
 
   if( ret != SQLITE_OK ){
       printf("Errore durante l'interrogazione: %s\n", error_message);
       sqlite3_free(error_message);
-   } else
+   }else
+      sqlite3_free(error_message);
+}
 
-  sqlite3_free(error_message);
+int make_table_callback (void *query_result, int cells_number, char **rows, char **rows_index){
 
+  int sql_index = info_table->query_index;
 
+  /*
+    La strategia per la creazione di una tabella con i risultati sql è la seguente:
+    mi appoggio su un file per scrivere il codice html con all'interno dei tag
+    le informazioni estrapolate dalla query, successivamente salvo il contenuto
+    del file creato in un buffer e lo elimino.
+    Vado quindi a instanziare un buffer grande come il file in cui aggiungere la
+    tabela + la grandezza del buffer in cui abbiamo costruito la tabella;
+    Sovrascrivo quindi il file originale carattere per carattere, quando arrivo
+    al punto in cui si trovava il tag <sql\> con la query (lo ricavo dalla struttura
+    globale info_query->query_index) vado ad inserire il contenuto, sempre carattere
+    per carattere, del buffer creato
+  */
 
+  FILE* temp_file = fopen("make_table_callback_temp_file", "w");
 
+  fputs(strdup(TABLE_TAG), temp_file);
+  for(int i = 0; i < cells_number; i++) {
+     //se nella cella è presente un dato lo stampa, altrimenti inserisce NULL
+     printf("%s: %s\n", rows_index[i], rows[i] ? rows[i] : "NULL");
+  }
+  printf("\n");
+  fclose(temp_file);
+  return 0;
 
 }
 
