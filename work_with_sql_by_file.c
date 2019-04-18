@@ -4,25 +4,37 @@
 #include <regex.h>
 #include <errno.h>
 #include <sqlite3.h>
+#include <stdbool.h>
 
 //specificare il percorso
 #define DB_FOLDER "db/"
 #define HTML_FOLDER "html/"
 //speccificare il nome del file temporaneo che verrà composto
 #define TMP_FILE_NAME "html/temp.html"
-//regex che cerca il nome del db nel rispettivo tag <sql/>
+#define MAKE_TABLE_TMP_FILE_NAME "make_table_callback_temp_file.txt"
+
+/*
+  cerca un carattere sql, successivamente accetta un numero indefinito di spazi
+  che possono esserci come non esserci (\s*)
+  poi cerca la parola chiave 'database=', dopo di essa sono accettati un numero
+  indefinito di spazii che possono esserci come non esserci;
+  nelle parentesi tonde c'è ciò che desideriamo intercettare: il nome del Database
+  l'espressione [^ ]* significa "accetta qualsiasi carattere che non sia uno spazio"
+  in modo da evitarci problemi di spazi dopo il nome del db; accetto successivamente un
+  numero indefinito si spazi fino al /> che chiude il tag
+*/
 #define FIND_TAG_DB_REGEX "<sql\\s*database=\\s*([^ ]*)\\s*\\/>"
 //regex che cerca una query nel rispettivo tag <sql/>
 #define FIND_TAG_QUERY_REGEX "<sql\\s*query=\\s*(.*;)\\s*\\/>"
 //definizione dei tag per scrivere la tabella html
-#define TAG_TABLE_START "<table border=\"1px solid\" align=\"center\">"
-#define TAG_TABLE_END "</table>"
-#define TAG_TR_START "<tr>"
-#define TAG_TR_END "</tr>"
-#define TAG_TH_START "<th>"
-#define TAG_TH_START "</th>"
-#define TAG_TD_START "<td>"
-#define TAG_TD_END "</td>"
+#define TAG_TABLE_START "<table border=\"1px solid\" align=\"center\">\n\t"
+#define TAG_TABLE_END "</table>\n"
+#define TAG_TR_START "<tr>\n\t"
+#define TAG_TR_END "</tr>\n"
+#define TAG_TH_START "<th>\n\t"
+#define TAG_TH_END "</th>\n"
+#define TAG_TD_START "<td>\n\t"
+#define TAG_TD_END "</td>\n"
 
 //grandezza massima buffer gestione regex
 #define MAX_ERROR_MSG 0x1000
@@ -41,6 +53,11 @@ typedef struct {
 
 //Definiamo la struttura per salvarci le informazioni per la tabella globale
 TABLE_INFO* info_table;
+/*
+  mi serve per permettere alla funzione di callback di scrivere solo una volta
+  sul file temporaneo il nome delle colonne tel db
+*/
+bool is_row_index_writed;
 
 //Prototipi
 
@@ -137,6 +154,8 @@ int main(int argc, char const *argv[]) {
 
   //Alloco lo spazio in memoria per variabile globale
   info_table = (TABLE_INFO*) malloc(sizeof(TABLE_INFO));
+  //dato che non ho ancora scritto niente metto a false la variabile globale di controllo
+  is_row_index_writed = false;
   //Avvio la funzioe che andrà a compilarmi la struttura
   find_query(TMP_FILE_NAME);
   //DEBUG
@@ -302,6 +321,13 @@ void make_table(sqlite3* my_db){
 
   char* error_message = 0;
   char* query = strdup(info_table->query);
+
+  //Creaiamo il file temporaneo per il buffer
+  FILE* temp_file_1 = fopen(MAKE_TABLE_TMP_FILE_NAME, "w");
+  //Scriviamo la prima riga
+  fputs(strdup(TAG_TABLE_START), temp_file_1);
+  fclose(temp_file_1);
+
   int ret = sqlite3_exec(my_db, query, make_table_callback, 0, &error_message);
 
   if( ret != SQLITE_OK ){
@@ -309,6 +335,24 @@ void make_table(sqlite3* my_db){
       sqlite3_free(error_message);
    }else
       sqlite3_free(error_message);
+
+    //Riapro il file in "a" per non sovrascrivere tutto
+    FILE* temp_file_2 = fopen(MAKE_TABLE_TMP_FILE_NAME, "a");
+    //chiudo la tabella
+    fputs(TAG_TABLE_END, temp_file_2);
+    fclose(temp_file_2);
+    //rimetto la variabile di controllo a false per le chiamate successive
+    is_row_index_writed = false;
+
+    //Procedo adesso a leggere tutto ciò che ho scritto in un buffer
+    FILE* to_read = fopen(MAKE_TABLE_TMP_FILE_NAME, "r");
+    int size_of_to_read_file = get_file_size(MAKE_TABLE_TMP_FILE_NAME);
+    char buffer[size_of_to_read_file];
+    fread(buffer, size_of_to_read_file, sizeof(char), to_read);
+    fclose(to_read);
+    remove(MAKE_TABLE_TMP_FILE_NAME);
+    printf("Buffer letto: %s\n", buffer);
+
 }
 
 int make_table_callback (void *query_result, int cells_number, char **rows, char **rows_index){
@@ -328,14 +372,36 @@ int make_table_callback (void *query_result, int cells_number, char **rows, char
     per carattere, del buffer creato
   */
 
-  FILE* temp_file = fopen("make_table_callback_temp_file", "w");
-
-  fputs(strdup(TABLE_TAG), temp_file);
-  for(int i = 0; i < cells_number; i++) {
-     //se nella cella è presente un dato lo stampa, altrimenti inserisce NULL
-     printf("%s: %s\n", rows_index[i], rows[i] ? rows[i] : "NULL");
+  FILE* temp_file = fopen(MAKE_TABLE_TMP_FILE_NAME, "a");
+  //aggiungo una riga alla tabella
+  fputs(TAG_TR_START, temp_file);
+  //Aggiungo al file prima i nomi della colonne (controllo la variabile globale)
+  if(!is_row_index_writed){
+    for(int i = 0; i < cells_number; i++) {
+       fputs(TAG_TH_START, temp_file);
+       fputs(rows_index[i], temp_file);
+       fputs("\n", temp_file);
+       fputs(TAG_TH_END, temp_file);
+    }
+    is_row_index_writed = true;
   }
-  printf("\n");
+  //chiudo la riga alla tabella
+  fputs(TAG_TR_END, temp_file);
+  //apro la riga dei contenuti
+  fputs(TAG_TR_START, temp_file);
+  for(int i = 0; i < cells_number; i++) {
+     fputs(TAG_TD_START, temp_file);
+     //Prima di inserire un qualche valore controllo che non sia null
+     if (rows[i] != NULL)
+      fputs(rows[i], temp_file);
+     else
+      fputs("NULL", temp_file);
+
+     fputs("\n", temp_file);
+     fputs(TAG_TD_END, temp_file);
+  }
+  //chiudo la riga alla tabella
+  fputs(TAG_TR_END, temp_file);
   fclose(temp_file);
   return 0;
 
