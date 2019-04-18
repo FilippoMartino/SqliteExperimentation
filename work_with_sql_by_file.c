@@ -210,18 +210,6 @@ char* get_db_name(char* file_path){
     //il buffer lo preferisco come puntatore
     char* file_content = strdup(buffer);;
     //comando contenente la regex in formato stringa
-    //quella di tosello -> "<sql(\\s+database=(.+))?\\s+query=(.*;)\\s*\\/>"
-    /*
-      Regex fatta da me: cerca un carattere sql, successivamente accetta
-      un numero indefinito di spazi che possono esserci come non esserci (\s*)
-      poi cerca la parola chiave 'database=', dopo di essa sono accettati un numero
-      indefinito di spazii che possono esserci come non esserci;
-      nelle parentesi tonde c'è ciò che desideriamo intercettare: il nome del Database
-      l'espressione [^ ]* significa "accetta qualsiasi carattere che non sia uno spazio"
-      in modo da evitarci problemi di spazi dopo il nome del db; accetto successivamente un
-      numero indefinito si spazi fino al /> che chiude il tag
-    */
-
 
     //procediamo alla compilazione della regex
     compile_regex(&regex, strdup(FIND_TAG_DB_REGEX));
