@@ -209,6 +209,7 @@ static int compile_regex (regex_t * r, const char * regex_text){
     corrispondente <sql> dal file temporaneo che abbiamo creato
 
   */
+
 char* get_db_name(char* file_path){
 
     FILE* file = fopen(file_path, "r");
@@ -300,7 +301,6 @@ void find_query(char* file_path){
   char* query_name = strdup(result);
   //deallochiamo la stringa di cortesia
   free(result);
-
   //provvediamo adesso a rimuovere la linea dal file
   remove_range_from_file(file_path, matches_array[0].rm_so, matches_array[0].rm_eo);
   //compiliamo la struttura e restituiamola
@@ -310,12 +310,6 @@ void find_query(char* file_path){
 
 
 }
-
-
-
-
-
-
 
 void make_table(sqlite3* my_db){
 
@@ -352,6 +346,35 @@ void make_table(sqlite3* my_db){
     fclose(to_read);
     remove(MAKE_TABLE_TMP_FILE_NAME);
     printf("Buffer letto: %s\n", buffer);
+
+    //creo il buffer finale
+    //DEBUG printf("lunghezza del file finale: %d\n",(int) strlen(buffer) + get_file_size(info_table->file_path));
+    int final_buffer_lenght = (int) strlen(buffer) + get_file_size(info_table->file_path);
+    char final_buffer[final_buffer_lenght];
+    int sql_index = info_table->query_index;
+    //Procedo adesso a scrivere la tabella sul file originale
+    printf("query index %d\n", sql_index);
+    FILE* temp_file_3 = fopen(info_table->file_path, "r");
+
+      for (int i = 0; i < final_buffer_lenght; i++){
+
+        //se arrivo al punto in cui c'era la query aggiungo la tabella
+        if (i == sql_index){
+          for(int j = 0; j < strlen(buffer); j++){
+            final_buffer[i] = buffer[j];
+            i++;
+          }
+        }
+        final_buffer[i] = (char) fgetc(temp_file_3);
+        //printf("buffer[%d] = %c\n", i, final_buffer[i]);
+      }
+
+    fclose(temp_file_3);
+    printf("Final file: %s\n", final_buffer);
+    //sovrascrivo il vecchi file con la tabella
+    FILE* final_file = fopen(info_table->file_path, "w");
+    fwrite(final_buffer, 1, final_buffer_lenght, final_file);
+    fclose(final_file);
 
 }
 
@@ -407,12 +430,6 @@ int make_table_callback (void *query_result, int cells_number, char **rows, char
 
 }
 
-
-
-
-
-
-
 int callback(void *query_result, int cells_number, char **rows, char **rows_index) {
 
    for(int i = 0; i < cells_number; i++) {
@@ -424,7 +441,6 @@ int callback(void *query_result, int cells_number, char **rows, char **rows_inde
 }
 
 int null_object(){  return 0;  }
-
 
 void execute_query(sqlite3* my_db, char* sql){
 

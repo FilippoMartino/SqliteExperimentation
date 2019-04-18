@@ -6,23 +6,7 @@
   </head>
   <body>
       <h1 align="center">chinook</h1>
-        <table border="1px solid" align="center">
-	<tr>
-	<th>
-	AlbumId
-</th>
-<th>
-	Name
-</th>
-</tr>
-<tr>
-	<td>
-	10
-</td>
-<td>
-	Audioslave
-</td>
-</tr>
-</table>
+    <sql database=chinook.db/>
+    <sql query=SELECT albums.AlbumId, artists.Name FROM albums INNER JOIN artists ON (albums.Artistid = artists.Artistid) WHERE AlbumId=10;/>
   </body>
 </html>
