@@ -27,13 +27,31 @@ typedef struct {
 
 //Prototipi
 
+//Compila la regex
 static int compile_regex (regex_t *, const char *);
+//Stampa a terminale il risultato di una query
 void execute_query(sqlite3*, char*);
+//Utilizzata per interrogare il db
 int callback(void *, int, char **, char **);
+/*
+  Utilizzata quando non ci si aspetta un valore di ritorno da una query,
+  come una CREATE TABLE
+*/
 int null_object();
+/*
+   Analizza il file che si trova nel percorso passato, trova il tag sql con il
+   nome del db, rimuove la riga con il tag e restituisce il nome del db;
+   utilizza le regex per la ricerca
+*/
 char* get_db_name(char*);
+/*
+  Stesso compito della funzione precedente, ma questa compila una specifica
+  struttura che ci permetterà successivamente di conoscere la posizione del
+  tag sql all'interno del file per andare a scrivere la tabella html con i
+  valori restituiti dall'interrogazione
+*/
 QUERY_INFO* get_query(char*);
-void make_table(char*, QUERY_INFO*);
+void make_table(char*, QUERY_INFO*, sqlite3*);
 int get_file_size(char*);
 void remove_range_from_file(char*, int, int);
 
@@ -260,15 +278,30 @@ QUERY_INFO* get_query(char* file_path){
 
 }
 
-void make_table(char* file_path, QUERY_INFO* query_info){
+
+
+
+
+
+
+void make_table(char* file_path, QUERY_INFO* query_info, sqlite3* my_db){
 
     //estrapoliamo i dati dalla struttura
     char* query = query_info->query;
     int sql_index = query_info->query_index;
     //deallochiamo lo spazio in memoria
     free(query_info);
-    
+
+
+
+
 }
+
+
+
+
+
+
 
 int callback(void *query_result, int cells_number, char **rows, char **rows_index) {
 
@@ -281,6 +314,7 @@ int callback(void *query_result, int cells_number, char **rows, char **rows_inde
 }
 
 int null_object(){  return 0;  }
+
 
 void execute_query(sqlite3* my_db, char* sql){
 
