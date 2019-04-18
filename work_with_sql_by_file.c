@@ -21,9 +21,13 @@ typedef struct {
   char* query;
   //posizione della query nel file originale
   int query_index;
+  //nome del file da utilizzare
+  char* file_path;
 
-}QUERY_INFO;
+}TABLE_INFO;
 
+//Definiamo la struttura per salvarci le informazioni per la tabella globale
+TABLE_INFO* info_table;
 
 //Prototipi
 
@@ -50,9 +54,12 @@ char* get_db_name(char*);
   tag sql all'interno del file per andare a scrivere la tabella html con i
   valori restituiti dall'interrogazione
 */
-QUERY_INFO* get_query(char*);
-void make_table(char*, QUERY_INFO*, sqlite3*);
+void find_query(char*);
+//Costruisce la tabella dopo aver interrogato il database
+void make_table(char*, TABLE_INFO*, sqlite3*);
+//Restituisce la grandezza del file che si trova nel percorso passatogli
 int get_file_size(char*);
+//Rimove (dal file corrsipondente al path passato) il range specificato
 void remove_range_from_file(char*, int, int);
 
 /*
@@ -100,6 +107,7 @@ int main(int argc, char const *argv[]) {
 
   sqlite3* my_db;
 
+  //Apertura del db e gestione eventuali errori
   if (sqlite3_open(db_name, &my_db)){
     printf("Impossibile accedere al database: %s\n", sqlite3_errmsg(my_db));
     return -1;
@@ -109,8 +117,12 @@ int main(int argc, char const *argv[]) {
   int ret;
   char* error_message = 0;
 
-  QUERY_INFO* my_query_info = get_query(TMP_FILE_NAME);
-  printf("query: %s\n", my_query_info->query);
+  //Alloco lo spazio in memoria per variabile globale
+  info_table = (TABLE_INFO*) malloc(sizeof(TABLE_INFO));
+  //Avvio la funzioe che andrà a compilarmi la struttura
+  find_query(TMP_FILE_NAME);
+  //DEBUG
+  printf("query: [%s] - inizia in: %d - del file %s\n", info_table->query, info_table->query_index, info_table->file_path);
 
   /*
     Eseguo la query con la funzione sqlite3_exec(), che pretende:
@@ -123,7 +135,7 @@ int main(int argc, char const *argv[]) {
 
   */
 
-  execute_query(my_db, my_query_info->query);
+
 
   sqlite3_free(error_message);
   sqlite3_close(my_db);
@@ -228,7 +240,7 @@ char* get_db_name(char* file_path){
     return db_name;
   }
 
-QUERY_INFO* get_query(char* file_path){
+void find_query(char* file_path){
 
   FILE* file = fopen(file_path, "r");
   //buffer per lettura sequenziale del file
@@ -269,12 +281,10 @@ QUERY_INFO* get_query(char* file_path){
   //provvediamo adesso a rimuovere la linea dal file
   remove_range_from_file(file_path, matches_array[0].rm_so, matches_array[0].rm_eo);
   //compiliamo la struttura e restituiamola
-  QUERY_INFO* info = (QUERY_INFO*) malloc(sizeof(QUERY_INFO));
-  info->query = strdup(query_name);
-  printf("query: %s\n", info->query);
-  info->query_index = matches_array[0].rm_so;
+  info_table->query = strdup(query_name);
+  info_table->query_index = matches_array[0].rm_so;
+  info_table->file_path = file_path;
 
-  return info;
 
 }
 
@@ -284,13 +294,19 @@ QUERY_INFO* get_query(char* file_path){
 
 
 
-void make_table(char* file_path, QUERY_INFO* query_info, sqlite3* my_db){
+void make_table(sqlite3* my_db){
 
-    //estrapoliamo i dati dalla struttura
-    char* query = query_info->query;
-    int sql_index = query_info->query_index;
-    //deallochiamo lo spazio in memoria
-    free(query_info);
+  char* error_message = 0;
+  char* query = strdup(info_table->query);
+  int ret = sqlite3_exec(my_db, query, callback, 0, &error_message);
+
+  if( ret != SQLITE_OK ){
+      printf("Errore durante l'interrogazione: %s\n", error_message);
+      sqlite3_free(error_message);
+   } else
+
+  sqlite3_free(error_message);
+
 
 
 
